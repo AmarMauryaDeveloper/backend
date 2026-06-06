@@ -93,6 +93,13 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Project Management API is running",
+  });
+});
+
 // Catch all unhandled routes
 app.use("*", (req, res, next) => {
   res.status(404).json({
