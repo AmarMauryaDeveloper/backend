@@ -32,7 +32,7 @@ app.use(cookieParser());
 
 // Enable CORS
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "http://localhost:3000",
+  origin: process.env.CLIENT_URL || "https://frontend-tau-ashen-61.vercel.app/",
   credentials: true,
   optionsSuccessStatus: 200,
 };
