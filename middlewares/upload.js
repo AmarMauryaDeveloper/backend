@@ -1,28 +1,8 @@
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 
-// __dirname equivalent for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Disk storage configuration
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Memory storage configuration
+const storage = multer.memoryStorage();
 
 // File validation filter
 const fileFilter = (req, file, cb) => {
@@ -44,6 +24,7 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit per file
   },
 });
+
 
 // Wrap multer array to handle validation and file limit errors
 export const uploadAttachments = (req, res, next) => {

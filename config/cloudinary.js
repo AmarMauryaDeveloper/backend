@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
 
 const isCloudinaryConfigured = !!(
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -14,7 +15,24 @@ if (isCloudinaryConfigured) {
   });
   console.log('Cloudinary initialized successfully.');
 } else {
-  console.log('Cloudinary credentials missing or incomplete. Using local uploads directory fallback.');
+  console.log('Cloudinary credentials missing. Direct uploads will fail.');
 }
 
-export { cloudinary, isCloudinaryConfigured };
+const uploadToCloudinary = (fileBuffer, folder, resourceType = 'auto') => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: resourceType,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    Readable.from(fileBuffer).pipe(stream);
+  });
+};
+
+export { cloudinary, isCloudinaryConfigured, uploadToCloudinary };
+

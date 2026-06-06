@@ -1,15 +1,30 @@
-import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
 let io;
 const userSockets = new Map(); // Map to track userId -> socketIds
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://frontend-tau-ashen-61.vercel.app",
+  "https://frontend-tau-ashen-61.vercel.app/"
+];
+
+if (process.env.CLIENT_URL) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+  if (process.env.CLIENT_URL.endsWith("/")) {
+    allowedOrigins.push(process.env.CLIENT_URL.slice(0, -1));
+  } else {
+    allowedOrigins.push(process.env.CLIENT_URL + "/");
+  }
+}
+
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || 'http://localhost:3000',
-      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      origin: allowedOrigins,
+      methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
     },
   });
@@ -20,14 +35,16 @@ export const initSocket = (server) => {
       const token = socket.handshake.auth.token || socket.handshake.query.token;
 
       if (!token) {
-        return next(new Error('Authentication error: Token missing'));
+        return next(new Error("Authentication error: Token missing"));
       }
 
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
       const user = await User.findById(decoded.id);
 
       if (!user || !user.isActive) {
-        return next(new Error('Authentication error: Invalid or inactive user'));
+        return next(
+          new Error("Authentication error: Invalid or inactive user"),
+        );
       }
 
       socket.user = {
@@ -38,11 +55,11 @@ export const initSocket = (server) => {
 
       next();
     } catch (err) {
-      return next(new Error('Authentication error: Token validation failed'));
+      return next(new Error("Authentication error: Token validation failed"));
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on("connection", (socket) => {
     const userId = socket.user.id;
     const userRole = socket.user.role;
 
@@ -60,7 +77,7 @@ export const initSocket = (server) => {
     }
     userSockets.get(userId).add(socket.id);
 
-    socket.on('disconnect', () => {
+    socket.on("disconnect", () => {
       console.log(`Socket Disconnected: User ${socket.user.name} (${userId})`);
       const sockets = userSockets.get(userId);
       if (sockets) {
@@ -78,7 +95,7 @@ export const initSocket = (server) => {
 // Real-time helper utilities
 export const getIO = () => {
   if (!io) {
-    throw new Error('Socket.io not initialized!');
+    throw new Error("Socket.io not initialized!");
   }
   return io;
 };

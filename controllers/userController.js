@@ -2,29 +2,15 @@ import User from '../models/User.js';
 import ErrorResponse from '../utils/errorResponse.js';
 import { createActivityLog } from '../services/logService.js';
 import { createNotification } from '../services/notificationService.js';
-import { isCloudinaryConfigured, cloudinary } from '../config/cloudinary.js';
-import fs from 'fs';
-import path from 'path';
+import { isCloudinaryConfigured, uploadToCloudinary } from '../config/cloudinary.js';
 
-// Helper to upload avatar file (either to Cloudinary or local fallback)
-const uploadAvatarFile = async (file, req) => {
-  if (isCloudinaryConfigured) {
-    try {
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: 'avatars',
-        resource_type: 'image',
-      });
-      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-      return result.secure_url;
-    } catch (uploadError) {
-      console.error('Cloudinary avatar upload failed, using local fallback:', uploadError.message);
-      const hostUrl = `${req.protocol}://${req.get('host')}`;
-      return `${hostUrl}/uploads/${path.basename(file.path)}`;
-    }
-  } else {
-    const hostUrl = `${req.protocol}://${req.get('host')}`;
-    return `${hostUrl}/uploads/${path.basename(file.path)}`;
+// Helper to upload avatar file to Cloudinary
+const uploadAvatarFile = async (file) => {
+  if (!isCloudinaryConfigured) {
+    throw new Error('Cloudinary is not configured. Avatar upload is unavailable.');
   }
+  const result = await uploadToCloudinary(file.buffer, 'avatars', 'image');
+  return result.secure_url;
 };
 
 
@@ -77,15 +63,12 @@ export const createUser = async (req, res, next) => {
   try {
     const userExists = await User.findOne({ email });
     if (userExists) {
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
       return next(new ErrorResponse('Email already registered', 400));
     }
 
     let avatarUrl = avatar || '';
     if (req.file) {
-      avatarUrl = await uploadAvatarFile(req.file, req);
+      avatarUrl = await uploadAvatarFile(req.file);
     }
 
     const user = await User.create({
@@ -126,9 +109,6 @@ export const createUser = async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     next(err);
   }
 };
@@ -143,9 +123,6 @@ export const updateUser = async (req, res, next) => {
     let user = await User.findById(req.params.id);
 
     if (!user) {
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
       return next(new ErrorResponse(`User not found with id of ${req.params.id}`, 404));
     }
 
@@ -157,7 +134,7 @@ export const updateUser = async (req, res, next) => {
     }
     
     if (req.file) {
-      user.avatar = await uploadAvatarFile(req.file, req);
+      user.avatar = await uploadAvatarFile(req.file);
     } else if (avatar !== undefined) {
       user.avatar = avatar;
     }
@@ -173,9 +150,6 @@ export const updateUser = async (req, res, next) => {
 
     res.status(200).json({ success: true, data: user });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     next(err);
   }
 };
@@ -232,9 +206,6 @@ export const updateMe = async (req, res, next) => {
       if (email !== user.email) {
         const emailExists = await User.findOne({ email });
         if (emailExists) {
-          if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-          }
           return next(new ErrorResponse('Email already registered by another account', 400));
         }
         user.email = email;
@@ -242,7 +213,7 @@ export const updateMe = async (req, res, next) => {
     }
     
     if (req.file) {
-      user.avatar = await uploadAvatarFile(req.file, req);
+      user.avatar = await uploadAvatarFile(req.file);
     } else if (avatar !== undefined) {
       user.avatar = avatar;
     }
@@ -258,9 +229,6 @@ export const updateMe = async (req, res, next) => {
 
     res.status(200).json({ success: true, data: user });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     next(err);
   }
 };

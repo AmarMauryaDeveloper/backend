@@ -1,15 +1,8 @@
+import "dotenv/config"; // Must be first — loads .env before any other module initializes
 import express from "express";
 import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import swaggerUi from "swagger-ui-express";
-
-// Load environment variables
-dotenv.config();
 
 import connectDB from "./config/db.js";
 import { initSocket } from "./sockets/socketHandler.js";
@@ -31,28 +24,34 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Enable CORS
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://frontend-tau-ashen-61.vercel.app",
+  "https://frontend-tau-ashen-61.vercel.app/",
+];
+
+if (process.env.CLIENT_URL) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+  if (process.env.CLIENT_URL.endsWith("/")) {
+    allowedOrigins.push(process.env.CLIENT_URL.slice(0, -1));
+  } else {
+    allowedOrigins.push(process.env.CLIENT_URL + "/");
+  }
+}
+
 const corsOptions = {
-  origin: process.env.CLIENT_URL || "https://frontend-tau-ashen-61.vercel.app/",
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Serve uploaded files statically
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Swagger UI Route setup
-try {
-  const swaggerPath = path.join(__dirname, "swagger.json");
-  const swaggerDocument = JSON.parse(fs.readFileSync(swaggerPath, "utf8"));
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  console.log("Swagger API documentation mounted at /api-docs");
-} catch (swaggerError) {
-  console.error("Failed to load Swagger JSON:", swaggerError.message);
-}
 
 // Seed admin and user accounts if DB is empty
 const seedDatabase = async () => {

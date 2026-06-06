@@ -1,15 +1,9 @@
 import Project from '../models/Project.js';
 import User from '../models/User.js';
 import ErrorResponse from '../utils/errorResponse.js';
-import { isCloudinaryConfigured, cloudinary } from '../config/cloudinary.js';
+import { isCloudinaryConfigured, cloudinary, uploadToCloudinary } from '../config/cloudinary.js';
 import { createActivityLog } from '../services/logService.js';
 import { createNotification } from '../services/notificationService.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // @desc    Get all projects (with Search, Filter, Sort, Pagination)
 // @route   GET /api/projects
@@ -100,41 +94,21 @@ export const createProject = async (req, res, next) => {
 
     const attachments = [];
     if (req.files && req.files.length > 0) {
+      if (!isCloudinaryConfigured) {
+        return next(new ErrorResponse('Cloudinary is not configured. File uploads are disabled.', 400));
+      }
       for (const file of req.files) {
-        if (isCloudinaryConfigured) {
-          try {
-            const result = await cloudinary.uploader.upload(file.path, {
-              folder: 'project_saas',
-              resource_type: 'auto',
-            });
-            attachments.push({
-              name: file.originalname,
-              secure_url: result.secure_url,
-              public_id: result.public_id,
-              size: file.size,
-              mimeType: file.mimetype,
-            });
-            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-          } catch (uploadError) {
-            console.error('Cloudinary upload failed, using local fallback:', uploadError.message);
-            const hostUrl = `${req.protocol}://${req.get('host')}`;
-            attachments.push({
-              name: file.originalname,
-              secure_url: `${hostUrl}/uploads/${path.basename(file.path)}`,
-              public_id: null,
-              size: file.size,
-              mimeType: file.mimetype,
-            });
-          }
-        } else {
-          const hostUrl = `${req.protocol}://${req.get('host')}`;
+        try {
+          const result = await uploadToCloudinary(file.buffer, 'project_saas', 'auto');
           attachments.push({
             name: file.originalname,
-            secure_url: `${hostUrl}/uploads/${path.basename(file.path)}`,
-            public_id: null,
+            secure_url: result.secure_url,
+            public_id: result.public_id,
             size: file.size,
             mimeType: file.mimetype,
           });
+        } catch (uploadError) {
+          return next(new ErrorResponse(`Cloudinary upload failed: ${uploadError.message}`, 400));
         }
       }
     }
@@ -243,41 +217,21 @@ export const updateProject = async (req, res, next) => {
 
     const attachments = [...project.attachments];
     if (req.files && req.files.length > 0) {
+      if (!isCloudinaryConfigured) {
+        return next(new ErrorResponse('Cloudinary is not configured. File uploads are disabled.', 400));
+      }
       for (const file of req.files) {
-        if (isCloudinaryConfigured) {
-          try {
-            const result = await cloudinary.uploader.upload(file.path, {
-              folder: 'project_saas',
-              resource_type: 'auto',
-            });
-            attachments.push({
-              name: file.originalname,
-              secure_url: result.secure_url,
-              public_id: result.public_id,
-              size: file.size,
-              mimeType: file.mimetype,
-            });
-            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-          } catch (uploadError) {
-            console.error('Cloudinary upload failed, using local fallback:', uploadError.message);
-            const hostUrl = `${req.protocol}://${req.get('host')}`;
-            attachments.push({
-              name: file.originalname,
-              secure_url: `${hostUrl}/uploads/${path.basename(file.path)}`,
-              public_id: null,
-              size: file.size,
-              mimeType: file.mimetype,
-            });
-          }
-        } else {
-          const hostUrl = `${req.protocol}://${req.get('host')}`;
+        try {
+          const result = await uploadToCloudinary(file.buffer, 'project_saas', 'auto');
           attachments.push({
             name: file.originalname,
-            secure_url: `${hostUrl}/uploads/${path.basename(file.path)}`,
-            public_id: null,
+            secure_url: result.secure_url,
+            public_id: result.public_id,
             size: file.size,
             mimeType: file.mimetype,
           });
+        } catch (uploadError) {
+          return next(new ErrorResponse(`Cloudinary upload failed: ${uploadError.message}`, 400));
         }
       }
     }
@@ -347,11 +301,7 @@ export const deleteProject = async (req, res, next) => {
     }
 
     for (const file of project.attachments) {
-      if (!file.public_id) {
-        const filename = path.basename(file.secure_url);
-        const filepath = path.join(__dirname, '../uploads', filename);
-        if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-      } else if (isCloudinaryConfigured) {
+      if (file.public_id && isCloudinaryConfigured) {
         try {
           await cloudinary.uploader.destroy(file.public_id);
         } catch (error) {
